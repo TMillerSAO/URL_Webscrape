@@ -1,0 +1,95 @@
+'''Not all are needed. This is a snippet from a larger script'''
+
+from bs4 import BeautifulSoup
+import requests
+from selenium import webdriver 
+from selenium.webdriver.common.by import By 
+from selenium.webdriver.chrome.service import Service as ChromeService 
+from webdriver_manager.chrome import ChromeDriverManager 
+from selenium import webdriver 
+import time
+from selenium.webdriver.support.ui import WebDriverWait 
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.chrome.options import Options
+import re
+import pandas as pd
+import os
+from datetime import datetime
+from sqlalchemy import create_engine
+
+
+
+#prints start runtime
+print(datetime.now())
+
+#Creates new list for the dataframe. 
+#Sets record count to 0 so you can track where errors occur and how many records were recorded
+Audit_dataframe = []
+output_counter = 0
+
+#Defines data row append function
+def AddToDFList():
+    Table_Row.extend([Audit_year, Audit_name, Audit_hyper])
+    Audit_dataframe.append(Table_Row)
+    global output_counter
+    output_counter+=1
+    print(output_counter, 'records')
+    
+    
+options =  Options()
+options.add_argument('--headless=new')
+
+#Initialize the Chrome driver with specified options
+driver = webdriver.Chrome(options=options)
+
+#Load website and wait a little for page to load
+url = 'https://www.mass.gov/lists/all-audit-reports'
+page = driver.get(url)
+driver.implicitly_wait(10)
+
+#Define XPath used to get year "groups"
+Group_XPATH = "//section[@class = 'ma__stacked-row__section  ma__stacked-row__section--borderless ma__stacked-row--restricted']"
+
+
+#Number of year "groups"
+Audit_lists = len(driver.find_elements(By.XPATH, Group_XPATH))
+
+#For each group, extract the year
+for year in range(1,(Audit_lists + 1)):
+    Audit_year = driver.find_element(By.XPATH, Group_XPATH+ "[" + str(year) +"]"+"//h2").text
+    if Audit_year == '2022':
+        break
+        
+    #Define XPath for each audit title and link
+    link_XPATH = Group_XPATH + "[" + str(year) + "]//div[@class = 'ma__download-link ']"
+    
+    #Number of audits per year
+    link_list = len(driver.find_elements(By.XPATH, link_XPATH))
+    
+    #For each year, extract audit title and hyperlink
+    for url in range(1, (link_list+1)):
+        
+        Audit_name = driver.find_element(By.XPATH, link_XPATH +"[" + str(url) + "]//span").text
+        if Audit_name[:13] =="Audit of the ":
+            Audit_name = Audit_name[13:]
+        if Audit_name [:9] =="Audit of ":
+            Audit_name = Audit_name[9:]
+        
+        Audit_hyper = driver.find_element(By.XPATH, link_XPATH +"[" + str(url) + "]//a").get_attribute('href')
+        
+        #Create a new data row, then populate and append row to Audit_dataframe list created earlier
+        Table_Row = []
+        AddToDFList()
+
+        
+driver.quit()        
+
+
+#Puts data into a Pandas dataframe then exports data as an Excel
+df = pd.DataFrame(Audit_dataframe, columns = ['Year', 'Audit Name', 'Hyperlink'])
+df.to_excel('Documents\\WebScraping_YearTitleLink.xlsx', index = False)
+
+#prints end time
+print(datetime.now())
